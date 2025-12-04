@@ -1,12 +1,33 @@
 <?php
 /**
- * Instalador Simplificado para Railway
- * Railway já configura o banco automaticamente!
+ * Instalador Simplificado para Railway - InstaBoost
+ * Otimizado por: Assistente IA
  */
 
-// CARREGA CONFIG PRIMEIRO!
-require_once 'config.php';
+// Ativa exibição de erros apenas para o instalador (ajuda no debug)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
+// Tenta carregar a config. Se falhar, avisa o usuário.
+if (file_exists('config.php')) {
+    require_once 'config.php';
+} else {
+    die("<div style='padding: 20px; font-family: sans-serif; background: #ffebee; color: #c62828;'>❌ Erro Crítico: O arquivo <strong>config.php</strong> não foi encontrado. Por favor, envie-o para o Railway.</div>");
+}
+
+// Função auxiliar para limpar comentários SQL
+function cleanSQL($sql) {
+    $lines = explode("\n", $sql);
+    $clean = "";
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line && substr($line, 0, 2) != '--' && substr($line, 0, 1) != '#') {
+            $clean .= $line . "\n";
+        }
+    }
+    return $clean;
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -17,8 +38,8 @@ require_once 'config.php';
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #6B46C1, #9333EA);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
             display: flex;
@@ -26,61 +47,53 @@ require_once 'config.php';
             justify-content: center;
         }
         .container {
-            background: white;
-            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
             padding: 40px;
             max-width: 700px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
         h1 {
-            color: #6B46C1;
-            margin-bottom: 30px;
+            color: #4a148c;
+            margin-bottom: 25px;
             text-align: center;
+            font-size: 2rem;
         }
+        h3 { color: #333; margin-bottom: 10px; font-size: 1.1rem; }
         .step {
-            background: #f8f9fa;
+            background: #fff;
             padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            border-left: 4px solid #6B46C1;
-        }
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #28a745;
-        }
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #dc3545;
-        }
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        button {
-            background: linear-gradient(135deg, #6B46C1, #9333EA);
-            color: white;
-            padding: 15px 30px;
-            border: none;
             border-radius: 10px;
-            font-size: 1.2em;
-            font-weight: 600;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .status-box { padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 0.95rem; line-height: 1.6; }
+        .success { background: #e8f5e9; color: #2e7d32; border-left: 5px solid #2e7d32; }
+        .error { background: #ffebee; color: #c62828; border-left: 5px solid #c62828; }
+        .info { background: #e3f2fd; color: #1565c0; border-left: 5px solid #1565c0; }
+        
+        button {
+            background: linear-gradient(to right, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: bold;
             cursor: pointer;
             width: 100%;
-            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        button:hover { opacity: 0.9; }
+        button:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 5px 15px rgba(37, 117, 252, 0.4);
+        }
+        a { text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
+        ul { list-style-position: inside; }
+        code { background: #eee; padding: 2px 5px; border-radius: 4px; font-family: monospace; color: #d63384; }
     </style>
 </head>
 <body>
@@ -91,166 +104,149 @@ require_once 'config.php';
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['install'])) {
             
             echo "<div class='step'>";
-            echo "<h3>📦 Criando estrutura...</h3>";
+            echo "<h3>📦 Executando instalação...</h3>";
             
             try {
-                // Testa conexão
-                echo "<div class='info'>Testando conexão com banco de dados...</div>";
-                $db = getDB();
-                echo "<div class='success'>✅ Conexão com MySQL OK!</div>";
-                
-                // Lê SQL
-                if (!file_exists('database.sql')) {
-                    throw new Exception("Arquivo database.sql não encontrado!");
+                // 1. Testa conexão
+                if (!function_exists('getDB')) {
+                    throw new Exception("Função getDB() não encontrada no config.php");
                 }
                 
-                $sql = file_get_contents('database.sql');
+                $db = getDB();
+                $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                echo "<div class='status-box success'>✅ Conexão com Banco de Dados estabelecida!</div>";
                 
-                // Remove delimitadores problemáticos
-                $sql = str_replace('DELIMITER //', '', $sql);
-                $sql = str_replace('DELIMITER ;', '', $sql);
+                // 2. Lê e Executa SQL
+                if (!file_exists('database.sql')) {
+                    throw new Exception("Arquivo <code>database.sql</code> não encontrado na raiz!");
+                }
                 
-                // Separa comandos
-                $statements = explode(';', $sql);
+                $sqlContent = file_get_contents('database.sql');
+                // Remove delimitadores e limpa comentários para evitar erros de parser simples
+                $sqlContent = str_replace(['DELIMITER //', 'DELIMITER ;', '//', '$$'], '', $sqlContent);
+                $sqlContent = cleanSQL($sqlContent);
                 
+                $statements = explode(';', $sqlContent);
                 $executed = 0;
-                $errors = 0;
+                $warnings = 0;
+
                 foreach ($statements as $statement) {
                     $statement = trim($statement);
-                    if (!empty($statement) && strlen($statement) > 5) {
+                    if (!empty($statement)) {
                         try {
                             $db->exec($statement);
                             $executed++;
                         } catch (PDOException $e) {
-                            // Ignora erros de "já existe"
-                            if (strpos($e->getMessage(), 'already exists') === false && 
-                                strpos($e->getMessage(), 'Duplicate') === false) {
-                                echo "<div class='error'>⚠️ " . $e->getMessage() . "</div>";
-                                $errors++;
+                            // Ignora erros comuns de "tabela já existe"
+                            if (strpos($e->getMessage(), 'already exists') !== false || 
+                                strpos($e->getMessage(), 'Duplicate') !== false) {
+                                $warnings++;
+                            } else {
+                                echo "<div class='status-box error'>⚠️ Erro SQL: " . htmlspecialchars($e->getMessage()) . "</div>";
                             }
                         }
                     }
                 }
                 
-                echo "<div class='success'>✅ {$executed} comandos SQL executados!</div>";
-                if ($errors > 0) {
-                    echo "<div class='info'>ℹ️ {$errors} avisos (pode ignorar se tabelas já existiam)</div>";
+                echo "<div class='status-box success'>✅ Banco de dados atualizado ({$executed} comandos). " . ($warnings > 0 ? "<small>(Ignorados {$warnings} itens já existentes)</small>" : "") . "</div>";
+
+                // 3. Verifica se tabela principal existe
+                try {
+                    $stmt = $db->query("SELECT COUNT(*) FROM orders");
+                    $count = $stmt->fetchColumn();
+                    echo "<div class='status-box info'>📊 Tabela 'orders' verificada: <strong>{$count}</strong> pedidos existentes.</div>";
+                } catch (PDOException $e) {
+                    echo "<div class='status-box error'>❌ A tabela 'orders' não foi criada corretamente. Verifique o arquivo SQL.</div>";
                 }
                 
-                // Verifica tabelas
-                $tables = $db->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-                
-                if (in_array('orders', $tables)) {
-                    echo "<div class='success'>✅ Tabela 'orders' criada com sucesso!</div>";
-                    
-                    $count = $db->query("SELECT COUNT(*) FROM orders")->fetchColumn();
-                    echo "<div class='info'>📊 Total de pedidos: {$count}</div>";
-                } else {
-                    echo "<div class='error'>❌ Tabela 'orders' não foi criada!</div>";
-                }
-                
-                // Cria diretórios
+                // 4. Cria diretórios
                 $dirs = ['logs', 'uploads', 'cache'];
+                echo "<div class='status-box info'>";
                 foreach ($dirs as $dir) {
                     if (!is_dir($dir)) {
-                        mkdir($dir, 0755, true);
-                        echo "<div class='success'>✅ Diretório '{$dir}' criado</div>";
+                        if (mkdir($dir, 0755, true)) {
+                            echo "✅ Pasta <code>$dir</code> criada.<br>";
+                        } else {
+                            echo "❌ Falha ao criar <code>$dir</code> (Permissão negada).<br>";
+                        }
+                    } else {
+                        echo "📂 Pasta <code>$dir</code> já existe.<br>";
                     }
                 }
-                
                 echo "</div>";
                 
-                echo "<div class='step'>";
-                echo "<h3>✅ Instalação Concluída!</h3>";
-                echo "<div class='success'>";
-                echo "<p><strong>🎉 Sistema instalado com sucesso!</strong></p>";
-                echo "<p style='margin-top: 15px;'><strong>Próximos passos:</strong></p>";
-                echo "<ol style='margin-left: 20px; margin-top: 10px;'>";
-                echo "<li>Configure webhook no Asaas</li>";
-                echo "<li>Adicione créditos na RevisionSMM</li>";
-                echo "<li>Acesse TEST_SYSTEM.php</li>";
-                echo "<li>Faça um pedido de teste</li>";
-                echo "</ol>";
+                echo "</div>"; // Fim do step
+
+                // Mensagem Final
+                echo "<div class='step' style='text-align: center;'>";
+                echo "<h3>🎉 Instalação Concluída!</h3>";
+                echo "<p style='margin: 15px 0;'>O sistema está pronto para uso.</p>";
+                echo "<div style='display: grid; gap: 10px; grid-template-columns: 1fr 1fr;'>";
+                echo "<a href='TEST_SYSTEM.php'><button type='button' style='background: #4caf50;'>Testar Sistema</button></a>";
+                echo "<a href='admin.php'><button type='button' style='background: #2196f3;'>Painel Admin</button></a>";
                 echo "</div>";
-                echo "</div>";
-                
-                echo "<div class='step'>";
-                echo "<h3>🔗 Links Úteis</h3>";
-                echo "<p><a href='TEST_SYSTEM.php' style='color: #6B46C1;'>→ Testar Sistema</a></p>";
-                echo "<p><a href='test_service.php' style='color: #6B46C1;'>→ Ver Serviço 4119</a></p>";
-                echo "<p><a href='admin.php' style='color: #6B46C1;'>→ Painel Admin</a></p>";
                 echo "</div>";
                 
             } catch (Exception $e) {
-                echo "<div class='error'>❌ Erro: " . $e->getMessage() . "</div>";
-                echo "<div class='info'>";
-                echo "<p><strong>Verifique:</strong></p>";
-                echo "<ul style='margin-left: 20px;'>";
-                echo "<li>Railway MySQL está rodando?</li>";
-                echo "<li>Variáveis de ambiente configuradas?</li>";
-                echo "<li>Arquivo database.sql existe?</li>";
-                echo "</ul>";
+                echo "<div class='status-box error'>";
+                echo "<h3>❌ Erro Fatal</h3>";
+                echo "<p>" . $e->getMessage() . "</p>";
+                echo "<p><small>Verifique as variáveis de ambiente no Railway.</small></p>";
                 echo "</div>";
             }
             
         } else {
+            // TELA INICIAL (ANTES DE CLICAR EM INSTALAR)
         ?>
         
         <div class="step">
-            <h3>📋 Railway já configurou automaticamente:</h3>
-            <div class="<?php echo getenv('MYSQLHOST') ? 'success' : 'error'; ?>">
-                <?php
-                if (getenv('MYSQLHOST')) {
-                    echo "<p>✅ Host: " . getenv('MYSQLHOST') . "</p>";
-                    echo "<p>✅ Porta: " . getenv('MYSQLPORT') . "</p>";
-                    echo "<p>✅ Banco: " . getenv('MYSQLDATABASE') . "</p>";
-                    echo "<p>✅ Usuário: " . getenv('MYSQLUSER') . "</p>";
-                    echo "<p>✅ Senha: ••••••••</p>";
-                } else {
-                    echo "<p>❌ Variáveis de ambiente MySQL não detectadas!</p>";
-                    echo "<p>Certifique-se de adicionar MySQL no Railway!</p>";
-                }
-                ?>
+            <h3>📡 Status do Ambiente Railway</h3>
+            
+            <!-- Check MySQL -->
+            <div class="status-box <?php echo getenv('MYSQLHOST') ? 'success' : 'error'; ?>">
+                <strong>Banco de Dados (MySQL):</strong><br>
+                <?php if (getenv('MYSQLHOST')): ?>
+                    ✅ Conectado ao Host: <?php echo getenv('MYSQLHOST'); ?><br>
+                    ✅ Banco: <?php echo getenv('MYSQLDATABASE'); ?>
+                <?php else: ?>
+                    ❌ Variáveis MYSQL não detectadas!<br>
+                    <small>Adicione o plugin MySQL no painel da Railway.</small>
+                <?php endif; ?>
+            </div>
+
+            <!-- Check APIs -->
+            <div class="status-box <?php echo (defined('API_KEY') && API_KEY != '') ? 'success' : 'error'; ?>">
+                <strong>Configuração de APIs:</strong><br>
+                <?php if (defined('API_KEY') && API_KEY != ''): ?>
+                    ✅ API Key RevisionSMM: Configurada<br>
+                    ✅ API Asaas: <?php echo defined('ASAAS_API_KEY') ? 'Configurada' : 'Ausente'; ?>
+                <?php else: ?>
+                    ❌ API_KEY não definida no config.php ou variáveis de ambiente.<br>
+                    <small>Vá em Variables no Railway e adicione: API_KEY, ASAAS_API_KEY, SERVICE_ID</small>
+                <?php endif; ?>
             </div>
         </div>
 
         <div class="step">
-            <h3>🔐 APIs configuradas:</h3>
-            <div class="<?php echo defined('API_KEY') ? 'success' : 'error'; ?>">
-                <?php
-                if (defined('API_KEY')) {
-                    echo "<p>✅ RevisionSMM: " . substr(API_KEY, 0, 20) . "...</p>";
-                    echo "<p>✅ Asaas: Configurado</p>";
-                    echo "<p>✅ Serviço ID: " . SERVICE_ID . "</p>";
-                } else {
-                    echo "<p>❌ Variáveis API_KEY não detectadas!</p>";
-                    echo "<p>Adicione as 3 variáveis na Railway:</p>";
-                    echo "<ul style='margin-left: 20px; margin-top: 10px;'>";
-                    echo "<li>API_KEY</li>";
-                    echo "<li>ASAAS_API_KEY</li>";
-                    echo "<li>SERVICE_ID</li>";
-                    echo "</ul>";
-                }
-                ?>
-            </div>
-        </div>
-
-        <div class="step">
-            <h3>⚙️ O que este instalador faz:</h3>
-            <ul style="margin-left: 20px; color: #555;">
-                <li>Cria tabelas no banco MySQL</li>
-                <li>Configura estrutura de pastas</li>
-                <li>Prepara sistema para uso</li>
+            <h3>⚙️ Ações da Instalação:</h3>
+            <ul style="margin-left: 20px; color: #555; line-height: 1.8;">
+                <li>📂 Importar estrutura do banco de dados (<code>database.sql</code>)</li>
+                <li>📁 Criar pastas de sistema (logs, uploads, cache)</li>
+                <li>🔗 Testar conexão com provedores</li>
             </ul>
         </div>
 
         <form method="post">
-            <button type="submit" name="install">🚀 Criar Tabelas Agora</button>
+            <button type="submit" name="install">🚀 Iniciar Instalação</button>
         </form>
 
         <?php
         }
         ?>
+        
+        <p style="text-align: center; margin-top: 20px; color: #888; font-size: 0.8em;">
+            InstaBoost Installer v2.0 &bull; Railway Edition
+        </p>
     </div>
 </body>
 </html>
